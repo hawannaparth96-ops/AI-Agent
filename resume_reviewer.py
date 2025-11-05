@@ -122,22 +122,8 @@ st.set_page_config(page_title="Quicky Resume Reviewer and Validator through ATS"
 st.markdown("""
     <style>
     .main {background-color: #f9fafb; padding: 20px;}
-    h1 {
-        text-align: center;
-        color: #1f77b4;
-        font-size: 42px;
-        white-space: nowrap;
-        width: 100%;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        margin-bottom: 10px;
-    }
-    .footer {
-        text-align: right;
-        font-size: 13px;
-        color: gray;
-        margin-top: 50px;
-    }
+    h1 {text-align: center; color: #1f77b4;}
+    .footer {text-align: right; font-size: 13px; color: gray; margin-top: 50px;}
     .stButton>button {
         background-color: #1f77b4;
         color: white;
@@ -148,11 +134,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Header (Single Line, Full Width)
-st.markdown("""
-    <h1>Quicky Resume Reviewer and Validator through ATS</h1>
-""", unsafe_allow_html=True)
-
+st.title("Quicky Resume Reviewer and Validator through ATS")
 st.write("### Upload your resume to receive a detailed ATS-based and section-wise review:")
 
 uploaded_file = st.file_uploader("Upload Resume (PDF or DOCX)", type=["pdf", "docx"])
