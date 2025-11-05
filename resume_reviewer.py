@@ -23,7 +23,6 @@ def extract_text_from_docx(file):
 def analyze_resume(text, job_keywords):
     """
     Analyze grammar, structure, and keyword relevance.
-    No Java required (TextBlob-based correction).
     """
     blob = TextBlob(text)
 
@@ -85,17 +84,96 @@ def send_email(recipient_email, score, comments):
         return False  # skip sending if not configured
 
     subject = "Your Resume Review & ATS Report"
-    body = f"""
-Hi,
+    body = (
+        f"Hi,\n\n"
+        f"Your resume review is completed.\n\n"
+        f"ATS Score: {score}/100\n\n"
+        f"Comments:\n- " + "\n- ".join(comments) +
+        "\n\nThank you for using AI Resume Reviewer!\n\nBest Regards,\nATS Resume Validator"
+    )
 
-Your resume review is completed.
+    msg = MIMEMultipart()
+    msg['From'] = sender_email
+    msg['To'] = recipient_email
+    msg['Subject'] = subject
+    msg.attach(MIMEText(body, 'plain'))
 
-ATS Score: {score}/100
+    try:
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(sender_email, sender_password)
+        server.send_message(msg)
+        server.quit()
+        return True
+    except Exception as e:
+        print("Error sending email:", e)
+        return False
 
-Comments:
-- {chr(10).join(comments)}
 
-Thank you for using AI Resume Reviewer!
+# ========== 🎨 Streamlit Frontend ==========
 
-Best Regards,
-ATS Resume Vali
+st.set_page_config(page_title="ATS Resume Reviewer", layout="centered")
+
+st.markdown("""
+    <style>
+    .main {background-color: #f8f9fa; padding: 20px;}
+    h1 {text-align: center; color: #2E86C1;}
+    .stButton>button {
+        background-color: #2E86C1;
+        color: white;
+        border-radius: 8px;
+        padding: 10px 20px;
+        width: 100%;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+st.title("💼 ATS Resume Reviewer")
+st.markdown("#### Validate your resume for ATS compatibility and get instant feedback!")
+
+email = st.text_input("📧 Enter Email ID *", placeholder="you@example.com")
+uploaded_file = st.file_uploader("📄 Upload Resume *", type=["pdf", "docx"])
+job_keywords_input = st.text_input("🧠 Enter Job Role Keywords (comma-separated)", "python, automation, testing, api, selenium")
+
+if st.button("🚀 Validate Resume"):
+    if not email or not uploaded_file:
+        st.error("❌ Both Email ID and Resume are mandatory!")
+    else:
+        st.info("⏳ Analyzing your resume... please wait.")
+        try:
+            if uploaded_file.name.endswith(".pdf"):
+                text = extract_text_from_pdf(uploaded_file)
+            else:
+                text = extract_text_from_docx(uploaded_file)
+
+            job_keywords = [k.strip() for k in job_keywords_input.split(",")]
+            ats_score, structure_score, keyword_score, comments, grammar_issues, found_keywords = analyze_resume(text, job_keywords)
+
+            st.success("✅ Resume Analyzed Successfully!")
+            st.metric("ATS Score", f"{ats_score}/100")
+
+            st.write("---")
+            st.subheader("📊 Detailed Breakdown:")
+            st.write(f"**Structure Completeness:** {structure_score}/100")
+            st.write(f"**Keyword Match (ATS Relevance):** {keyword_score}/100 → Found: {', '.join(found_keywords) if found_keywords else 'None'}")
+
+            st.write("---")
+            st.subheader("💬 Review Comments:")
+            for c in comments:
+                st.write(f"- {c}")
+
+            st.write("---")
+            st.subheader("🔍 Grammar Suggestions (Top 10):")
+            if grammar_issues:
+                for g in grammar_issues[:10]:
+                    st.markdown(f"**Original:** {g['original']}  \n**Suggestion:** {g['suggestion']}")
+            else:
+                st.write("✅ No major grammar issues found.")
+
+            if send_email(email, ats_score, comments):
+                st.success(f"📩 A detailed report has been sent to {email}")
+            else:
+                st.info("⚠️ Email sending skipped or not configured (check secrets).")
+
+        except Exception as e:
+            st.error(f"Error: {e}")
