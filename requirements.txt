@@ -1,5 +1,5 @@
 streamlit
 python-docx
 PyPDF2
-language_tool_python
+textblob
 secure-smtplib
