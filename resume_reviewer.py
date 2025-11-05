@@ -4,14 +4,14 @@ import docx
 from textblob import TextBlob
 import nltk
 
-# --- Auto-download NLTK/TextBlob data (fixes corpus errors) ---
+# --- Auto-download NLTK/TextBlob data ---
 nltk.download('punkt', quiet=True)
 nltk.download('wordnet', quiet=True)
 nltk.download('omw-1.4', quiet=True)
 nltk.download('brown', quiet=True)
 nltk.download('averaged_perceptron_tagger', quiet=True)
 
-# ========== 📄 Helper Functions ==========
+# ========== Helper Functions ==========
 
 def extract_text_from_pdf(file):
     reader = PyPDF2.PdfReader(file)
@@ -28,21 +28,20 @@ def extract_text_from_docx(file):
 def analyze_resume(text):
     blob = TextBlob(text)
 
-    # Grammar correction detection
+    # Grammar detection
     grammar_issues = []
     for sentence in blob.sentences:
         corrected = sentence.correct()
         if corrected != sentence:
             grammar_issues.append((str(sentence), str(corrected)))
-
     grammar_count = len(grammar_issues)
 
-    # Section presence
+    # Section check
     required_sections = ['education', 'experience', 'skills', 'projects', 'summary']
     found_sections = [s for s in required_sections if s in text.lower()]
     structure_score = round(len(found_sections) / len(required_sections) * 100, 2)
 
-    # Keyword check (basic ATS simulation)
+    # Keyword check
     keywords = ['python', 'data', 'project', 'api', 'automation', 'testing', 'machine learning']
     found_keywords = [k for k in keywords if k.lower() in text.lower()]
     keyword_score = round(len(found_keywords) / len(keywords) * 100, 2)
@@ -51,73 +50,72 @@ def analyze_resume(text):
     ats_score = round((structure_score * 0.4) + (keyword_score * 0.4) + ((100 - grammar_count * 2) * 0.2), 2)
     ats_score = max(0, min(100, ats_score))
 
-    # Detailed Review Comments
+    # Detailed actionable comments
     comments = []
 
-    # Grammar feedback
+    # 1️⃣ Grammar
     if grammar_count > 10:
         comments.append(
-            "Your resume contains several grammatical issues that may impact readability. "
-            "Consider proofreading or using grammar-checking tools like Grammarly or LanguageTool "
-            "to ensure correct tense usage, punctuation, and consistency."
+            "✏️ *Grammar Issues Detected:* Your resume contains several grammatical or spelling mistakes. "
+            "Focus on your **Summary** and **Experience** sections — ensure verbs are in past tense (e.g., “Developed”, “Led”) "
+            "and avoid run-on sentences. Example:\n\n❌ 'I am responsible for testing and creating test cases'\n"
+            "✅ 'Created and executed automated test cases improving efficiency by 20%'."
         )
     elif grammar_count > 3:
         comments.append(
-            "A few grammar issues were detected. Review sentence structure and ensure consistency in "
-            "verb tense and clarity across bullet points and summary sections."
+            "📝 *Minor Grammar Issues:* A few inconsistencies were found. Review the **Skills** and **Projects** sections for clarity "
+            "and uniform tense. Keep sentences short and impactful."
         )
     else:
         comments.append(
-            "Your resume demonstrates strong grammar and writing clarity with minimal to no detectable issues."
+            "✅ *Excellent Grammar:* Your resume writing is clear, professional, and grammatically correct."
         )
 
-    # Structure feedback
-    if structure_score < 80:
+    # 2️⃣ Structure
+    missing_sections = [s.title() for s in required_sections if s not in found_sections]
+    if missing_sections:
         comments.append(
-            "It appears that some important sections are missing. Ensure that your resume includes: "
-            "Education, Experience, Skills, Projects, and a short Professional Summary. "
-            "Proper headings improve readability and help recruiters quickly locate key information."
+            f"📂 *Missing Sections:* {', '.join(missing_sections)} section(s) seem to be missing. "
+            "Add these with clear headings and bullet points for better readability."
         )
     else:
         comments.append(
-            "Your resume includes all the essential sections, providing a well-rounded professional overview. "
-            "You may further enhance it by maintaining consistent formatting, margins, and font styles."
+            "📘 *Strong Structure:* All key sections are present and logically organized. Maintain uniform header formatting."
         )
 
-    # Keyword / ATS feedback
+    # 3️⃣ Keyword Optimization (ATS)
+    missing_keywords = [k for k in keywords if k.lower() not in text.lower()]
     if keyword_score < 70:
         comments.append(
-            "Your resume could be more optimized for ATS (Applicant Tracking Systems). "
-            "Include more role-specific keywords — such as tools, frameworks, and certifications relevant "
-            "to your desired job — to increase compatibility with automated resume screening."
+            f"⚙️ *ATS Optimization:* Add missing job-relevant keywords like {', '.join(missing_keywords[:5])}. "
+            "Example: If applying for data-related roles, mention tools like Pandas, SQL, or Selenium. "
+            "This boosts ATS compatibility."
         )
     else:
         comments.append(
-            "Your resume includes a good amount of job-relevant keywords, improving your visibility in ATS scans. "
-            "Continue updating these keywords to match each job description you apply for."
+            "🔍 *ATS Ready:* Your resume includes strong role-relevant keywords. Continue tailoring them for each job description."
         )
 
-    # Overall presentation feedback
+    # 4️⃣ Layout / Presentation
     if ats_score < 60:
         comments.append(
-            "Overall, your resume needs improvement. Focus on layout clarity, consistency, and quantifying "
-            "achievements with measurable outcomes (e.g., improved efficiency by 30%, managed 5-member team, etc.)."
+            "🧾 *Presentation Tip:* Improve alignment and spacing. Ensure bullet points are consistent, and avoid dense text blocks. "
+            "Use simple fonts (Calibri, Arial) and keep resume length to one page if under 5 years of experience."
         )
     elif ats_score < 80:
         comments.append(
-            "Your resume is fairly strong but can be refined further. Review section alignment, ensure consistent bullet formatting, "
-            "and highlight measurable results to strengthen impact."
+            "📄 *Formatting Suggestion:* You have a good base. Refine visual consistency — use equal spacing, proper margins, "
+            "and align bullets neatly for a polished look."
         )
     else:
         comments.append(
-            "Your resume is well-structured, grammatically sound, and ATS-friendly. A few stylistic enhancements "
-            "such as better spacing, font consistency, and concise bullet points will make it even more professional."
+            "🌟 *Excellent Presentation:* Your resume layout looks clean and recruiter-friendly. Keep it updated with recent achievements."
         )
 
     return ats_score, structure_score, keyword_score, comments
 
 
-# ========== 🎨 Streamlit Frontend ==========
+# ========== Streamlit Frontend ==========
 
 st.set_page_config(page_title="Quicky Resume Reviewer and Validator", layout="centered")
 
@@ -125,6 +123,7 @@ st.markdown("""
     <style>
     .main {background-color: #f9fafb; padding: 20px;}
     h1 {text-align: center; color: #1f77b4;}
+    .footer {text-align: right; font-size: 13px; color: gray; margin-top: 50px;}
     .stButton>button {
         background-color: #1f77b4;
         color: white;
@@ -136,7 +135,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("Quicky Resume Reviewer and Validator")
-st.write("### Upload your resume below to get a detailed ATS and quality review:")
+st.write("### Upload your resume to receive a detailed ATS-based and section-wise review:")
 
 uploaded_file = st.file_uploader("Upload Resume (PDF or DOCX)", type=["pdf", "docx"])
 
@@ -162,6 +161,7 @@ if st.button("Validate Resume"):
 
         st.subheader("Detailed Review Comments")
         for c in comments:
-            st.write(f"- {c}")
+            st.markdown(f"<p style='margin-bottom:10px;'>{c}</p>", unsafe_allow_html=True)
 
         st.markdown("<h4 style='text-align:center; color:#1f77b4;'>Thank You! for visiting this Site</h4>", unsafe_allow_html=True)
+        st.markdown("<p class='footer'>Done by - its.parthav</p>", unsafe_allow_html=True)
