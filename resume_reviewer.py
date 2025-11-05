@@ -117,7 +117,7 @@ def analyze_resume(text):
 
 # ========== Streamlit Frontend ==========
 
-st.set_page_config(page_title="Quicky Resume Reviewer and Validator", layout="centered")
+st.set_page_config(page_title="Quicky Resume Reviewer and Validator through ATS", layout="centered")
 
 st.markdown("""
     <style>
@@ -134,7 +134,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.title("Quicky Resume Reviewer and Validator")
+st.title("Quicky Resume Reviewer and Validator through ATS")
 st.write("### Upload your resume to receive a detailed ATS-based and section-wise review:")
 
 uploaded_file = st.file_uploader("Upload Resume (PDF or DOCX)", type=["pdf", "docx"])
