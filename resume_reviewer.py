@@ -8,7 +8,7 @@ from email.mime.multipart import MIMEMultipart
 import smtplib
 import os
 
-# --- Auto-download NLTK/TextBlob data (fixes missing corpora error) ---
+# --- Auto-download NLTK/TextBlob data ---
 nltk.download('punkt', quiet=True)
 nltk.download('wordnet', quiet=True)
 nltk.download('omw-1.4', quiet=True)
@@ -55,25 +55,61 @@ def analyze_resume(text):
     ats_score = round((structure_score * 0.4) + (keyword_score * 0.4) + ((100 - grammar_count * 2) * 0.2), 2)
     ats_score = max(0, min(100, ats_score))
 
-    # Review Comments
+    # Detailed Review Comments
     comments = []
 
+    # Grammar feedback
     if grammar_count > 10:
-        comments.append("🔴 Your resume has several grammatical errors — please proofread carefully or use a grammar checker.")
+        comments.append(
+            "Your resume contains multiple grammatical issues that may affect readability. "
+            "Consider using professional proofreading tools like Grammarly or LanguageTool to ensure correct tense usage, punctuation, and sentence flow."
+        )
     elif grammar_count > 3:
-        comments.append("🟠 Some minor grammar issues found — review key sentences for clarity and correctness.")
+        comments.append(
+            "A few minor grammar issues were found. Review your sentences for clarity, avoid long phrases, and maintain consistent verb tenses throughout the document."
+        )
     else:
-        comments.append("🟢 Excellent grammar — very few or no errors detected!")
+        comments.append(
+            "Excellent grammar usage. Sentences are clear and concise with proper structure and punctuation."
+        )
 
+    # Structure feedback
     if structure_score < 80:
-        comments.append("🔴 Your resume is missing important sections. Include **Education**, **Experience**, **Skills**, **Projects**, and a **Summary**.")
+        comments.append(
+            "Your resume seems to be missing one or more key sections. "
+            "Ensure your resume includes: Education, Experience, Skills, Projects, and a Career Summary section. "
+            "This improves ATS readability and gives recruiters a complete picture of your qualifications."
+        )
     else:
-        comments.append("🟢 Your resume has a strong structure with all major sections present.")
+        comments.append(
+            "Your resume is well structured, covering all major sections required for a professional profile. "
+            "Consider keeping consistent formatting (font size, alignment, and bullet points) for better presentation."
+        )
 
+    # Keyword / ATS feedback
     if keyword_score < 70:
-        comments.append("🟠 Your resume could include more role-related keywords (e.g., skills, tools, and technologies).")
+        comments.append(
+            "The resume could include more job-specific keywords. Add role-relevant technologies, tools, or domain-specific terms "
+            "(e.g., frameworks, programming languages, or certifications) to increase visibility in Applicant Tracking Systems (ATS)."
+        )
     else:
-        comments.append("🟢 Good keyword usage — your resume aligns well with ATS scanning terms.")
+        comments.append(
+            "Your resume has a good amount of role-relevant keywords. Ensure these are evenly distributed in Experience and Skills sections for maximum ATS optimization."
+        )
+
+    # Overall presentation feedback
+    if ats_score < 60:
+        comments.append(
+            "Overall, your resume needs improvement. Focus on layout, clear section headings, quantifying achievements, and aligning content with job descriptions."
+        )
+    elif ats_score < 80:
+        comments.append(
+            "Your resume is fairly strong but can be improved. Fine-tune section alignment, make bullet points more action-oriented, and verify consistency in date formatting."
+        )
+    else:
+        comments.append(
+            "Your resume is well-written, structured, and ATS-friendly. A few refinements in design and measurable results will make it stand out."
+        )
 
     return ats_score, structure_score, keyword_score, comments
 
@@ -87,7 +123,7 @@ def send_email(recipient_email, score, comments):
 
     subject = "Your Resume Review & ATS Report"
     body = (
-        f"Hi,\n\n"
+        f"Hello,\n\n"
         f"Your resume review is completed.\n\n"
         f"ATS Score: {score}/100\n\n"
         f"Comments:\n- " + "\n- ".join(comments) +
@@ -130,15 +166,15 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.title("💼 Quicky Resume Reviewer and Validator")
+st.title("Quicky Resume Reviewer and Validator")
 st.write("### Please enter your details below to review your resume:")
 
-email = st.text_input("📧 Email ID *")
-uploaded_file = st.file_uploader("📎 Upload Resume (PDF or DOCX) *", type=["pdf", "docx"])
+email = st.text_input("Email ID")
+uploaded_file = st.file_uploader("Upload Resume (PDF or DOCX)", type=["pdf", "docx"])
 
 if st.button("Validate Resume"):
     if not email or not uploaded_file:
-        st.error("❌ Both Email ID and Resume file are required.")
+        st.error("Both Email ID and Resume file are required.")
     else:
         with st.spinner("Analyzing your resume..."):
             if uploaded_file.name.endswith(".pdf"):
@@ -148,25 +184,23 @@ if st.button("Validate Resume"):
 
             ats_score, structure_score, keyword_score, comments = analyze_resume(text)
 
-        # Results section
-        st.success("✅ Resume analysis completed successfully!")
+        st.success("Resume analysis completed successfully!")
 
-        st.subheader("📊 ATS Score Overview")
+        st.subheader("ATS Score Summary")
         st.progress(int(ats_score))
         st.write(f"**ATS Score:** {ats_score}/100")
         st.write(f"**Structure Score:** {structure_score}/100")
         st.write(f"**Keyword Match:** {keyword_score}/100")
 
-        st.subheader("💬 Review Comments")
+        st.subheader("Detailed Review Comments")
         for c in comments:
             st.write(f"- {c}")
 
         # Thank You Message
         st.markdown("<h4 style='text-align:center; color:#1f77b4;'>Thank You! for visiting this Site</h4>", unsafe_allow_html=True)
 
-        # Send Email
         success = send_email(email, ats_score, comments)
         if success:
-            st.info(f"📩 A detailed review report has been sent to {email}")
+            st.info(f"A detailed review report has been sent to {email}")
         else:
-            st.warning("⚠️ Could not send email. Please check SMTP configuration.")
+            st.warning("Could not send email. Please check SMTP configuration.")
