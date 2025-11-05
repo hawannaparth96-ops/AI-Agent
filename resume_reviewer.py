@@ -23,6 +23,15 @@ def analyze_resume(text):
     matches = tool.check(text)
     grammar_issues = len(matches)
 
+    # Grammar Details
+    grammar_details = []
+    for match in matches[:10]:  # limit to 10 for display
+        grammar_details.append({
+            "error": match.context,
+            "message": match.message,
+            "suggestions": match.replacements
+        })
+
     required_sections = ['education', 'experience', 'skills', 'projects', 'summary']
     found_sections = [s for s in required_sections if s in text.lower()]
     structure_score = round(len(found_sections) / len(required_sections) * 100, 2)
@@ -34,7 +43,7 @@ def analyze_resume(text):
     if grammar_issues > 10:
         comments.append("Too many grammatical errors found. Please proofread carefully.")
     elif grammar_issues > 3:
-        comments.append("Minor grammar issues found. Can be improved.")
+        comments.append("Some minor grammar issues found.")
     else:
         comments.append("Great grammar! Very few mistakes.")
 
@@ -43,15 +52,32 @@ def analyze_resume(text):
     else:
         comments.append("Good structure — all key sections found.")
 
-    return final_score, comments
+    return final_score, comments, grammar_details
 
-def send_email(recipient_email, score, comments):
-    # Configure your email here (you can use Gmail SMTP)
+def send_email(recipient_email, score, comments, grammar_details):
     sender_email = "your_email@gmail.com"
-    sender_password = "your_app_password"  # Use App Password, not real password
+    sender_password = "your_app_password"  # use Gmail App Password
 
     subject = "Your Resume Review Report"
-    body = f"Hi,\n\nYour resume review is completed.\n\nScore: {score}/100\nComments:\n- " + "\n- ".join(comments) + "\n\nBest Regards,\nAI Resume Reviewer"
+    details = "\n".join([f"- {c}" for c in comments])
+    grammar_text = "\n\nGrammar Suggestions:\n" + "\n".join([
+        f"- {g['error']} → {g['message']} | Suggestion: {', '.join(g['suggestions']) if g['suggestions'] else 'None'}"
+        for g in grammar_details
+    ])
+
+    body = f"""
+Hi,
+
+Your resume review is completed.
+
+Score: {score}/100
+Comments:
+{details}
+{grammar_text}
+
+Best Regards,
+AI Resume Reviewer
+    """
 
     msg = MIMEMultipart()
     msg['From'] = sender_email
@@ -73,7 +99,6 @@ def send_email(recipient_email, score, comments):
 # ========== Streamlit Frontend ==========
 st.set_page_config(page_title="AI Resume Reviewer", layout="centered")
 
-# Custom CSS
 st.markdown("""
     <style>
     .main {background-color: #f8f9fa; padding: 20px;}
@@ -87,9 +112,8 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# ---------- UI ----------
-st.title("💼 Wel-Come to Resume Reviewer")
-st.write("Please provide your email and upload your resume for analysis.")
+st.title("💼 Welcome to Resume Reviewer")
+st.write("Please provide your email and upload your resume for detailed analysis.")
 
 email = st.text_input("📧 Email ID *", placeholder="Enter your email address")
 uploaded_file = st.file_uploader("📄 Upload Resume *", type=["pdf", "docx"])
@@ -105,7 +129,7 @@ if st.button("Proceed 🚀"):
             else:
                 text = extract_text_from_docx(uploaded_file)
 
-            score, comments = analyze_resume(text)
+            score, comments, grammar_details = analyze_resume(text)
 
             st.success(f"✅ Resume Reviewed Successfully!")
             st.metric("Final Resume Score", f"{score}/100")
@@ -113,9 +137,14 @@ if st.button("Proceed 🚀"):
             for c in comments:
                 st.write(f"- {c}")
 
-            if send_email(email, score, comments):
-                st.success(f"📩 Review sent to {email}")
+            st.subheader("🔍 Grammar Suggestions (Top 10):")
+            for g in grammar_details:
+                st.markdown(f"**Issue:** {g['message']}  \n**Sentence:** {g['error']}  \n**Suggestion:** {', '.join(g['suggestions']) if g['suggestions'] else 'None'}")
+
+            if send_email(email, score, comments, grammar_details):
+                st.success(f"📩 Review report sent to {email}")
             else:
-                st.warning("⚠️ Could not send email. Check SMTP configuration.")
+                st.warning("⚠️ Could not send email. Check your SMTP email and app password configuration.")
+
         except Exception as e:
             st.error(f"Error: {e}")
