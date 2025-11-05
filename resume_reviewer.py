@@ -2,6 +2,8 @@ import streamlit as st
 import PyPDF2
 import docx
 from textblob import TextBlob
+import textblob.download_corpora
+textblob.download_corpora.download_all()
 import nltk
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
