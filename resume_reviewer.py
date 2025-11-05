@@ -2,11 +2,8 @@ import streamlit as st
 import PyPDF2
 import docx
 import language_tool_python
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 
-# ========== Helper Functions ==========
+# ---------- Helper Functions ----------
 def extract_text_from_pdf(file):
     reader = PyPDF2.PdfReader(file)
     text = ""
@@ -18,133 +15,65 @@ def extract_text_from_docx(file):
     doc = docx.Document(file)
     return "\n".join([para.text for para in doc.paragraphs])
 
-def analyze_resume(text):
+def grammar_score(text):
     tool = language_tool_python.LanguageTool('en-US')
     matches = tool.check(text)
-    grammar_issues = len(matches)
+    total_words = len(text.split())
+    mistakes = len(matches)
+    score = max(0, 100 - (mistakes / total_words * 100)) if total_words > 0 else 0
+    return round(score, 2), matches
 
-    # Grammar Details
-    grammar_details = []
-    for match in matches[:10]:  # limit to 10 for display
-        grammar_details.append({
-            "error": match.context,
-            "message": match.message,
-            "suggestions": match.replacements
-        })
+def keyword_score(text, keywords):
+    found = [k for k in keywords if k.lower() in text.lower()]
+    return round(len(found) / len(keywords) * 100, 2), found
 
+def structure_score(text):
     required_sections = ['education', 'experience', 'skills', 'projects', 'summary']
-    found_sections = [s for s in required_sections if s in text.lower()]
-    structure_score = round(len(found_sections) / len(required_sections) * 100, 2)
+    found = [s for s in required_sections if s in text.lower()]
+    return round(len(found) / len(required_sections) * 100, 2), found
 
-    score = max(0, 100 - grammar_issues)
-    final_score = round((score * 0.6) + (structure_score * 0.4), 2)
+# ---------- Streamlit Frontend ----------
+st.set_page_config(page_title="AI Resume Reviewer", page_icon="🧠", layout="centered")
+st.title("🧠 AI Resume Reviewer")
+st.write("Upload your resume (PDF or DOCX) to get an AI-based score and feedback!")
 
-    comments = []
-    if grammar_issues > 10:
-        comments.append("Too many grammatical errors found. Please proofread carefully.")
-    elif grammar_issues > 3:
-        comments.append("Some minor grammar issues found.")
+uploaded_file = st.file_uploader("Upload Resume", type=["pdf", "docx"])
+
+job_keywords = st.text_input("Enter Job Role Keywords (comma-separated)", 
+                             "python, automation, api testing, selenium")
+
+if uploaded_file is not None:
+    if uploaded_file.name.endswith(".pdf"):
+        text = extract_text_from_pdf(uploaded_file)
     else:
-        comments.append("Great grammar! Very few mistakes.")
+        text = extract_text_from_docx(uploaded_file)
 
-    if structure_score < 80:
-        comments.append("Missing some key sections. Include Education, Experience, Skills, and Projects.")
-    else:
-        comments.append("Good structure — all key sections found.")
+    if st.button("Validate Resume"):
+        with st.spinner("Analyzing resume..."):
+            g_score, g_issues = grammar_score(text)
+            k_score, found_keywords = keyword_score(text, [k.strip() for k in job_keywords.split(",")])
+            s_score, found_sections = structure_score(text)
 
-    return final_score, comments, grammar_details
+            final_score = round((g_score * 0.4) + (k_score * 0.3) + (s_score * 0.3), 2)
 
-def send_email(recipient_email, score, comments, grammar_details):
-    sender_email = "your_email@gmail.com"
-    sender_password = "your_app_password"  # use Gmail App Password
+        st.success(f"✅ Resume Review Completed!")
+        st.metric("Overall Resume Score", f"{final_score} / 100")
 
-    subject = "Your Resume Review Report"
-    details = "\n".join([f"- {c}" for c in comments])
-    grammar_text = "\n\nGrammar Suggestions:\n" + "\n".join([
-        f"- {g['error']} → {g['message']} | Suggestion: {', '.join(g['suggestions']) if g['suggestions'] else 'None'}"
-        for g in grammar_details
-    ])
+        st.subheader("Detailed Breakdown:")
+        st.write(f"**Grammar & Language:** {g_score}/100")
+        st.write(f"**Keyword Match:** {k_score}/100 → Found: {', '.join(found_keywords)}")
+        st.write(f"**Structure Completeness:** {s_score}/100 → Sections: {', '.join(found_sections)}")
 
-    body = f"""
-Hi,
+        st.subheader("Suggestions for Improvement:")
+        if len(g_issues) > 0:
+            st.write(f"- Grammar corrections suggested: {len(g_issues)} issues found.")
+        else:
+            st.write("✅ Great! No major grammatical issues found.")
 
-Your resume review is completed.
+        if k_score < 80:
+            st.write("- Add more job-relevant keywords.")
+        if s_score < 80:
+            st.write("- Ensure all key sections (Education, Skills, Experience, Projects, Summary) are included.")
 
-Score: {score}/100
-Comments:
-{details}
-{grammar_text}
-
-Best Regards,
-AI Resume Reviewer
-    """
-
-    msg = MIMEMultipart()
-    msg['From'] = sender_email
-    msg['To'] = recipient_email
-    msg['Subject'] = subject
-    msg.attach(MIMEText(body, 'plain'))
-
-    try:
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
-        server.login(sender_email, sender_password)
-        server.send_message(msg)
-        server.quit()
-        return True
-    except Exception as e:
-        print("Error sending email:", e)
-        return False
-
-# ========== Streamlit Frontend ==========
-st.set_page_config(page_title="AI Resume Reviewer", layout="centered")
-
-st.markdown("""
-    <style>
-    .main {background-color: #f8f9fa; padding: 20px;}
-    h1 {text-align: center; color: #2E86C1;}
-    .stButton>button {
-        background-color: #2E86C1;
-        color: white;
-        border-radius: 8px;
-        padding: 10px 20px;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
-st.title("💼 Welcome to Resume Reviewer")
-st.write("Please provide your email and upload your resume for detailed analysis.")
-
-email = st.text_input("📧 Email ID *", placeholder="Enter your email address")
-uploaded_file = st.file_uploader("📄 Upload Resume *", type=["pdf", "docx"])
-
-if st.button("Proceed 🚀"):
-    if not email or not uploaded_file:
-        st.error("❌ Both Email ID and Resume are mandatory!")
-    else:
-        st.info("⏳ Validating your resume, please wait...")
-        try:
-            if uploaded_file.name.endswith(".pdf"):
-                text = extract_text_from_pdf(uploaded_file)
-            else:
-                text = extract_text_from_docx(uploaded_file)
-
-            score, comments, grammar_details = analyze_resume(text)
-
-            st.success(f"✅ Resume Reviewed Successfully!")
-            st.metric("Final Resume Score", f"{score}/100")
-            st.subheader("Review Comments:")
-            for c in comments:
-                st.write(f"- {c}")
-
-            st.subheader("🔍 Grammar Suggestions (Top 10):")
-            for g in grammar_details:
-                st.markdown(f"**Issue:** {g['message']}  \n**Sentence:** {g['error']}  \n**Suggestion:** {', '.join(g['suggestions']) if g['suggestions'] else 'None'}")
-
-            if send_email(email, score, comments, grammar_details):
-                st.success(f"📩 Review report sent to {email}")
-            else:
-                st.warning("⚠️ Could not send email. Check your SMTP email and app password configuration.")
-
-        except Exception as e:
-            st.error(f"Error: {e}")
+else:
+    st.info("Please upload your resume to begin.")
