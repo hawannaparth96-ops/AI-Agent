@@ -120,7 +120,6 @@ def send_email(recipient_email, score, comments):
         print("Error sending email:", e)
         return False
 
-
 # ========== 🎨 Streamlit Frontend ==========
 
 st.set_page_config(page_title="ATS Resume Reviewer", layout="centered")
@@ -135,59 +134,68 @@ st.markdown("""
         border-radius: 8px;
         padding: 10px 20px;
         width: 100%;
+        font-size: 18px;
+    }
+    .stTextInput>div>div>input, .stFileUploader>div>div>div>button {
+        font-size: 18px !important;
+        height: 3.2em !important;
     }
     </style>
 """, unsafe_allow_html=True)
 
-st.title("💼 ATS Resume Reviewer")
+st.title("ATS Resume Reviewer")
 st.markdown("#### Validate your resume for ATS compatibility and get instant feedback!")
 
-email = st.text_input("📧 Enter Email ID *", placeholder="you@example.com")
+# Removed the email input field
 uploaded_file = st.file_uploader("📄 Upload Resume *", type=["pdf", "docx"])
 
-if st.button("🚀 Validate Resume"):
-    if not email or not uploaded_file:
-        st.error("❌ Both Email ID and Resume are mandatory!")
+if st.button("Validate Resume"):
+    if not uploaded_file:
+        st.error("❌ Please upload your resume first!")
     else:
-        st.info("⏳ Analyzing your resume... please wait.")
-        try:
-            if uploaded_file.name.endswith(".pdf"):
-                text = extract_text_from_pdf(uploaded_file)
-            else:
-                text = extract_text_from_docx(uploaded_file)
+        with st.spinner("⏳ Analyzing your resume... please wait."):
+            try:
+                # Extract text based on file type
+                if uploaded_file.name.endswith(".pdf"):
+                    text = extract_text_from_pdf(uploaded_file)
+                else:
+                    text = extract_text_from_docx(uploaded_file)
 
-            ats_score, structure_score, keyword_score, comments, grammar_issues, found_keywords = analyze_resume(text)
+                ats_score, structure_score, keyword_score, comments, grammar_issues, found_keywords = analyze_resume(text)
 
-            st.success("✅ Resume Analyzed Successfully!")
-            st.subheader("📊 ATS Score Overview")
+            except Exception as e:
+                st.error(f"Error: {e}")
+                st.stop()
 
-            # Progress Bars
-            st.progress(int(ats_score))
-            st.write(f"**Overall ATS Score:** {ats_score}/100")
+        # ✅ Review Completed Message
+        st.success("Resume analysis completed successfully!")
 
-            st.write(f"**Structure Completeness:** {structure_score}/100")
-            st.progress(int(structure_score))
+        # Results Section
+        st.subheader("ATS Score Overview")
+        st.progress(int(ats_score))
+        st.write(f"**Overall ATS Score:** {ats_score}/100")
 
-            st.write(f"**Keyword Match:** {keyword_score}/100")
-            st.progress(int(keyword_score))
+        st.write(f"**Structure Completeness:** {structure_score}/100")
+        st.progress(int(structure_score))
 
-            st.write("---")
-            st.subheader("💬 Review Comments:")
-            for c in comments:
-                st.write(f"- {c}")
+        st.write(f"**Keyword Match:** {keyword_score}/100")
+        st.progress(int(keyword_score))
 
-            st.write("---")
-            st.subheader("🔍 Grammar Suggestions (Top 10):")
-            if grammar_issues:
-                for g in grammar_issues[:10]:
-                    st.markdown(f"**Original:** {g['original']}  \n**Suggestion:** {g['suggestion']}")
-            else:
-                st.write("✅ No major grammar issues found.")
+        st.write("---")
+        st.subheader("Review Comments:")
+        for c in comments:
+            st.write(f"- {c}")
 
-            if send_email(email, ats_score, comments):
-                st.success(f"📩 A detailed report has been sent to {email}")
-            else:
-                st.info("⚠️ Email sending skipped or not configured (check Streamlit secrets).")
+        st.write("---")
+        st.subheader("Grammar Suggestions (Top 10):")
 
-        except Exception as e:
-            st.error(f"Error: {e}")
+        if grammar_issues:
+            formatted_suggestions = []
+            for g in grammar_issues[:10]:
+                formatted_suggestions.append(
+                    f"<p style='margin-bottom:10px;'><b>Original:</b> {g['original']}<br>"
+                    f"<b>Suggestion:</b> {g['suggestion']}</p>"
+                )
+            st.markdown("<br>".join(formatted_suggestions), unsafe_allow_html=True)
+        else:
+            st.write("No major grammar issues found.")
