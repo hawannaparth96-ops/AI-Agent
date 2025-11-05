@@ -3,12 +3,8 @@ import PyPDF2
 import docx
 from textblob import TextBlob
 import nltk
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-import smtplib
-import os
 
-# --- Auto-download NLTK/TextBlob data ---
+# --- Auto-download NLTK/TextBlob data (fixes corpus errors) ---
 nltk.download('punkt', quiet=True)
 nltk.download('wordnet', quiet=True)
 nltk.download('omw-1.4', quiet=True)
@@ -61,91 +57,64 @@ def analyze_resume(text):
     # Grammar feedback
     if grammar_count > 10:
         comments.append(
-            "Your resume contains multiple grammatical issues that may affect readability. "
-            "Consider using professional proofreading tools like Grammarly or LanguageTool to ensure correct tense usage, punctuation, and sentence flow."
+            "Your resume contains several grammatical issues that may impact readability. "
+            "Consider proofreading or using grammar-checking tools like Grammarly or LanguageTool "
+            "to ensure correct tense usage, punctuation, and consistency."
         )
     elif grammar_count > 3:
         comments.append(
-            "A few minor grammar issues were found. Review your sentences for clarity, avoid long phrases, and maintain consistent verb tenses throughout the document."
+            "A few grammar issues were detected. Review sentence structure and ensure consistency in "
+            "verb tense and clarity across bullet points and summary sections."
         )
     else:
         comments.append(
-            "Excellent grammar usage. Sentences are clear and concise with proper structure and punctuation."
+            "Your resume demonstrates strong grammar and writing clarity with minimal to no detectable issues."
         )
 
     # Structure feedback
     if structure_score < 80:
         comments.append(
-            "Your resume seems to be missing one or more key sections. "
-            "Ensure your resume includes: Education, Experience, Skills, Projects, and a Career Summary section. "
-            "This improves ATS readability and gives recruiters a complete picture of your qualifications."
+            "It appears that some important sections are missing. Ensure that your resume includes: "
+            "Education, Experience, Skills, Projects, and a short Professional Summary. "
+            "Proper headings improve readability and help recruiters quickly locate key information."
         )
     else:
         comments.append(
-            "Your resume is well structured, covering all major sections required for a professional profile. "
-            "Consider keeping consistent formatting (font size, alignment, and bullet points) for better presentation."
+            "Your resume includes all the essential sections, providing a well-rounded professional overview. "
+            "You may further enhance it by maintaining consistent formatting, margins, and font styles."
         )
 
     # Keyword / ATS feedback
     if keyword_score < 70:
         comments.append(
-            "The resume could include more job-specific keywords. Add role-relevant technologies, tools, or domain-specific terms "
-            "(e.g., frameworks, programming languages, or certifications) to increase visibility in Applicant Tracking Systems (ATS)."
+            "Your resume could be more optimized for ATS (Applicant Tracking Systems). "
+            "Include more role-specific keywords — such as tools, frameworks, and certifications relevant "
+            "to your desired job — to increase compatibility with automated resume screening."
         )
     else:
         comments.append(
-            "Your resume has a good amount of role-relevant keywords. Ensure these are evenly distributed in Experience and Skills sections for maximum ATS optimization."
+            "Your resume includes a good amount of job-relevant keywords, improving your visibility in ATS scans. "
+            "Continue updating these keywords to match each job description you apply for."
         )
 
     # Overall presentation feedback
     if ats_score < 60:
         comments.append(
-            "Overall, your resume needs improvement. Focus on layout, clear section headings, quantifying achievements, and aligning content with job descriptions."
+            "Overall, your resume needs improvement. Focus on layout clarity, consistency, and quantifying "
+            "achievements with measurable outcomes (e.g., improved efficiency by 30%, managed 5-member team, etc.)."
         )
     elif ats_score < 80:
         comments.append(
-            "Your resume is fairly strong but can be improved. Fine-tune section alignment, make bullet points more action-oriented, and verify consistency in date formatting."
+            "Your resume is fairly strong but can be refined further. Review section alignment, ensure consistent bullet formatting, "
+            "and highlight measurable results to strengthen impact."
         )
     else:
         comments.append(
-            "Your resume is well-written, structured, and ATS-friendly. A few refinements in design and measurable results will make it stand out."
+            "Your resume is well-structured, grammatically sound, and ATS-friendly. A few stylistic enhancements "
+            "such as better spacing, font consistency, and concise bullet points will make it even more professional."
         )
 
     return ats_score, structure_score, keyword_score, comments
-
-
-def send_email(recipient_email, score, comments):
-    sender_email = os.getenv("EMAIL_ADDRESS")
-    sender_password = os.getenv("EMAIL_PASSWORD")
-
-    if not sender_email or not sender_password:
-        return False
-
-    subject = "Your Resume Review & ATS Report"
-    body = (
-        f"Hello,\n\n"
-        f"Your resume review is completed.\n\n"
-        f"ATS Score: {score}/100\n\n"
-        f"Comments:\n- " + "\n- ".join(comments) +
-        "\n\nThank you for using Quicky Resume Reviewer and Validator!"
-    )
-
-    msg = MIMEMultipart()
-    msg['From'] = sender_email
-    msg['To'] = recipient_email
-    msg['Subject'] = subject
-    msg.attach(MIMEText(body, 'plain'))
-
-    try:
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
-        server.login(sender_email, sender_password)
-        server.send_message(msg)
-        server.quit()
-        return True
-    except Exception as e:
-        print("Error sending email:", e)
-        return False
 
 
 # ========== 🎨 Streamlit Frontend ==========
@@ -167,14 +136,13 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("Quicky Resume Reviewer and Validator")
-st.write("### Please enter your details below to review your resume:")
+st.write("### Upload your resume below to get a detailed ATS and quality review:")
 
-email = st.text_input("Email ID")
 uploaded_file = st.file_uploader("Upload Resume (PDF or DOCX)", type=["pdf", "docx"])
 
 if st.button("Validate Resume"):
-    if not email or not uploaded_file:
-        st.error("Both Email ID and Resume file are required.")
+    if not uploaded_file:
+        st.error("Please upload your resume before proceeding.")
     else:
         with st.spinner("Analyzing your resume..."):
             if uploaded_file.name.endswith(".pdf"):
@@ -196,11 +164,4 @@ if st.button("Validate Resume"):
         for c in comments:
             st.write(f"- {c}")
 
-        # Thank You Message
         st.markdown("<h4 style='text-align:center; color:#1f77b4;'>Thank You! for visiting this Site</h4>", unsafe_allow_html=True)
-
-        success = send_email(email, ats_score, comments)
-        if success:
-            st.info(f"A detailed review report has been sent to {email}")
-        else:
-            st.warning("Could not send email. Please check SMTP configuration.")
