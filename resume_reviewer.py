@@ -2,10 +2,18 @@ import streamlit as st
 import PyPDF2
 import docx
 from textblob import TextBlob
-import smtplib
+import nltk
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import smtplib
 import os
+
+# --- FIX for missing TextBlob/NLTK data ---
+nltk.download('punkt', quiet=True)
+nltk.download('wordnet', quiet=True)
+nltk.download('omw-1.4', quiet=True)
+nltk.download('brown', quiet=True)
+nltk.download('averaged_perceptron_tagger', quiet=True)
 
 # ========== 📄 Helper Functions ==========
 
@@ -13,17 +21,21 @@ def extract_text_from_pdf(file):
     reader = PyPDF2.PdfReader(file)
     text = ""
     for page in reader.pages:
-        text += page.extract_text()
+        if page.extract_text():
+            text += page.extract_text()
     return text
 
 def extract_text_from_docx(file):
     doc = docx.Document(file)
     return "\n".join([para.text for para in doc.paragraphs])
 
-def analyze_resume(text, job_keywords):
-    """
-    Analyze grammar, structure, and keyword relevance.
-    """
+def analyze_resume(text):
+    # 👇 Default keywords (You can modify this list as per your domain)
+    job_keywords = [
+        "python", "automation", "api", "selenium", "testing", 
+        "framework", "docker", "git", "jira", "unittest", "jenkins"
+    ]
+
     blob = TextBlob(text)
 
     # Grammar corrections
@@ -38,17 +50,18 @@ def analyze_resume(text, job_keywords):
 
     grammar_count = len(grammar_issues)
 
-    # Structure & ATS section check
+    # Section Check
     required_sections = ['education', 'experience', 'skills', 'projects', 'summary']
     found_sections = [s for s in required_sections if s in text.lower()]
     structure_score = round(len(found_sections) / len(required_sections) * 100, 2)
 
-    # Keyword match (ATS relevance)
+    # Keyword Match
     found_keywords = [k for k in job_keywords if k.lower() in text.lower()]
     keyword_score = round(len(found_keywords) / len(job_keywords) * 100, 2)
 
     # Overall ATS Score
     ats_score = round((structure_score * 0.4) + (keyword_score * 0.4) + ((100 - grammar_count * 2) * 0.2), 2)
+    ats_score = max(0, min(100, ats_score))  # Clamp between 0–100
 
     # Comments
     comments = []
@@ -60,28 +73,24 @@ def analyze_resume(text, job_keywords):
         comments.append("Excellent grammar — very few errors!")
 
     if structure_score < 80:
-        comments.append("Your resume is missing important sections. Include all key areas (Education, Experience, Skills, Projects, Summary).")
+        comments.append("Your resume is missing important sections. Add Education, Experience, Skills, Projects, and Summary.")
     else:
         comments.append("All key sections are well structured.")
 
     if keyword_score < 70:
-        comments.append("Your resume does not include enough job-relevant keywords. Try adding more role-specific skills.")
+        comments.append("Your resume lacks relevant technical keywords. Add more job-specific terms.")
     else:
-        comments.append("Good keyword usage relevant to the job role.")
+        comments.append("Good keyword usage relevant to the role.")
 
     return ats_score, structure_score, keyword_score, comments, grammar_issues, found_keywords
 
 
 def send_email(recipient_email, score, comments):
-    """
-    Optional: Send results via email.
-    Configure using Streamlit Secrets.
-    """
     sender_email = os.getenv("EMAIL_ADDRESS")
     sender_password = os.getenv("EMAIL_PASSWORD")
 
     if not sender_email or not sender_password:
-        return False  # skip sending if not configured
+        return False
 
     subject = "Your Resume Review & ATS Report"
     body = (
@@ -116,10 +125,10 @@ st.set_page_config(page_title="ATS Resume Reviewer", layout="centered")
 
 st.markdown("""
     <style>
-    .main {background-color: #f8f9fa; padding: 20px;}
-    h1 {text-align: center; color: #2E86C1;}
+    .main {background-color: #f9fafb; padding: 20px;}
+    h1 {text-align: center; color: #1f77b4;}
     .stButton>button {
-        background-color: #2E86C1;
+        background-color: #1f77b4;
         color: white;
         border-radius: 8px;
         padding: 10px 20px;
@@ -133,7 +142,6 @@ st.markdown("#### Validate your resume for ATS compatibility and get instant fee
 
 email = st.text_input("📧 Enter Email ID *", placeholder="you@example.com")
 uploaded_file = st.file_uploader("📄 Upload Resume *", type=["pdf", "docx"])
-job_keywords_input = st.text_input("🧠 Enter Job Role Keywords (comma-separated)", "python, automation, testing, api, selenium")
 
 if st.button("🚀 Validate Resume"):
     if not email or not uploaded_file:
@@ -146,16 +154,20 @@ if st.button("🚀 Validate Resume"):
             else:
                 text = extract_text_from_docx(uploaded_file)
 
-            job_keywords = [k.strip() for k in job_keywords_input.split(",")]
-            ats_score, structure_score, keyword_score, comments, grammar_issues, found_keywords = analyze_resume(text, job_keywords)
+            ats_score, structure_score, keyword_score, comments, grammar_issues, found_keywords = analyze_resume(text)
 
             st.success("✅ Resume Analyzed Successfully!")
-            st.metric("ATS Score", f"{ats_score}/100")
+            st.subheader("📊 ATS Score Overview")
 
-            st.write("---")
-            st.subheader("📊 Detailed Breakdown:")
+            # Progress Bars
+            st.progress(int(ats_score))
+            st.write(f"**Overall ATS Score:** {ats_score}/100")
+
             st.write(f"**Structure Completeness:** {structure_score}/100")
-            st.write(f"**Keyword Match (ATS Relevance):** {keyword_score}/100 → Found: {', '.join(found_keywords) if found_keywords else 'None'}")
+            st.progress(int(structure_score))
+
+            st.write(f"**Keyword Match:** {keyword_score}/100")
+            st.progress(int(keyword_score))
 
             st.write("---")
             st.subheader("💬 Review Comments:")
@@ -173,7 +185,7 @@ if st.button("🚀 Validate Resume"):
             if send_email(email, ats_score, comments):
                 st.success(f"📩 A detailed report has been sent to {email}")
             else:
-                st.info("⚠️ Email sending skipped or not configured (check secrets).")
+                st.info("⚠️ Email sending skipped or not configured (check Streamlit secrets).")
 
         except Exception as e:
             st.error(f"Error: {e}")
